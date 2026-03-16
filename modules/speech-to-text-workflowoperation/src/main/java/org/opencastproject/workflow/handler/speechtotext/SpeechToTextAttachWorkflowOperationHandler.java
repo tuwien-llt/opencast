@@ -141,6 +141,11 @@ public class SpeechToTextAttachWorkflowOperationHandler extends AbstractWorkflow
                 String.format("Speech-to-text job for media package `%s` failed", mediaPackage));
       }
 
+      if (job.getPayload().equals("NO_RESULT")) {
+        logger.info("No output from speech-to-text job {}.", job.getId());
+        continue;
+      }
+
       attachSubtitle(job, mediaPackage, tagsAndFlavors, appendSubtitleAs);
       attachedSubtitles++;
     }

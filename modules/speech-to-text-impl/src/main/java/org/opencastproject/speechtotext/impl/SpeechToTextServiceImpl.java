@@ -155,6 +155,10 @@ public class SpeechToTextServiceImpl extends AbstractJobProducer implements Spee
               workspace.get(mediaFile), jobDir, language, translate);
       language = result.getLanguage();
 
+      if (result.isEmpty()) {
+        return "NO_RESULT";
+      }
+
       // we need to call the "putInCollection" method to get
       // a URI, that can be used in the following processes
       final var outputName = String.format("%d-%s.vtt", job.getId(), FilenameUtils.getBaseName(mediaFile.getPath()));

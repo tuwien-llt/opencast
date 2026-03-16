@@ -566,6 +566,9 @@ public class WhisperCppEngine implements SpeechToTextEngine {
       }
     }
 
+    if (vtt.length() == 0) {
+      return SpeechToTextEngine.Result.empty();
+    }
     return new Result(subtitleLanguage, vtt);
   }
 
