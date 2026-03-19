@@ -84,6 +84,9 @@ public class SpeechToTextServiceImpl extends AbstractJobProducer implements Spee
   /** The workspace collection name */
   private static final String COLLECTION = "subtitles";
 
+  /** Constraint if the speech-to-text engine doesn't return any output */
+  private static final String NO_RESULT = "NO_RESULT";
+
   private static final String TMP_PREFIX = "tmp_";
 
 
@@ -156,7 +159,7 @@ public class SpeechToTextServiceImpl extends AbstractJobProducer implements Spee
       language = result.getLanguage();
 
       if (result.isEmpty()) {
-        return "NO_RESULT";
+        return NO_RESULT;
       }
 
       // we need to call the "putInCollection" method to get
