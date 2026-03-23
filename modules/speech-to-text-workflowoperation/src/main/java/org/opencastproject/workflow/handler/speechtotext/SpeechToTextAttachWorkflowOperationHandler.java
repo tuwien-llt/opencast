@@ -23,6 +23,7 @@ package org.opencastproject.workflow.handler.speechtotext;
 import org.opencastproject.inspection.api.MediaInspectionService;
 import org.opencastproject.job.api.JobContext;
 import org.opencastproject.mediapackage.MediaPackage;
+import org.opencastproject.mediapackage.MediaPackageElement;
 import org.opencastproject.serviceregistry.api.ServiceRegistry;
 import org.opencastproject.workflow.api.ConfiguredTagsAndFlavors;
 import org.opencastproject.workflow.api.WorkflowInstance;
@@ -30,6 +31,7 @@ import org.opencastproject.workflow.api.WorkflowOperationException;
 import org.opencastproject.workflow.api.WorkflowOperationHandler;
 import org.opencastproject.workflow.api.WorkflowOperationResult;
 import org.opencastproject.workspace.api.Workspace;
+
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -81,7 +83,7 @@ public class SpeechToTextAttachWorkflowOperationHandler extends AbstractSpeechTo
 
 
     // How to save the subtitle file? (as attachment, as track...)
-    AppendSubtitleAs appendSubtitleAs = howToAppendTheSubtitles(workflowInstance);
+    MediaPackageElement.Type appendSubtitleAs = getMediaPackageElementType(workflowInstance);
 
     // get previously started speech-to-text jobs
     var jobIds = Objects.toString(workflowInstance.getConfiguration(JOBS_WORKFLOW_CONFIGURATION), "");

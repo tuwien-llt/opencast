@@ -20,12 +20,11 @@
  */
 package org.opencastproject.workflow.handler.speechtotext;
 
-import org.apache.commons.lang3.BooleanUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.opencastproject.inspection.api.MediaInspectionService;
 import org.opencastproject.job.api.Job;
 import org.opencastproject.job.api.JobContext;
 import org.opencastproject.mediapackage.MediaPackage;
+import org.opencastproject.mediapackage.MediaPackageElement;
 import org.opencastproject.mediapackage.MediaPackageElementFlavor;
 import org.opencastproject.mediapackage.MediaPackageElements;
 import org.opencastproject.mediapackage.Track;
@@ -42,6 +41,9 @@ import org.opencastproject.workflow.api.WorkflowOperationHandler;
 import org.opencastproject.workflow.api.WorkflowOperationInstance;
 import org.opencastproject.workflow.api.WorkflowOperationResult;
 import org.opencastproject.workspace.api.Workspace;
+
+import org.apache.commons.lang3.BooleanUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -171,7 +173,7 @@ public class
     String languageCode = getMediaPackageLanguage(mediaPackage, workflowInstance);
 
     // How to save the subtitle file? (as attachment, as track...)
-    AppendSubtitleAs appendSubtitleAs = howToAppendTheSubtitles(workflowInstance);
+    MediaPackageElement.Type subtitleElementType = getMediaPackageElementType(workflowInstance);
 
     // Translate to english
     Boolean translate = getTranslationMode(workflowInstance);
@@ -202,7 +204,7 @@ public class
       createSubtitleAsync(workflowInstance, tracksToTranscribe, languageCode, translate);
     } else {
       for (Track track : tracksToTranscribe) {
-        createSubtitle(track, languageCode, mediaPackage, tagsAndFlavors, appendSubtitleAs, translate);
+        createSubtitle(track, languageCode, mediaPackage, tagsAndFlavors, subtitleElementType, translate);
       }
     }
 
@@ -271,12 +273,12 @@ public class
    * @param languageCode The language of the track.
    * @param parentMediaPackage The media package where the track is located.
    * @param tagsAndFlavors Tags and flavors instance (to get target flavor information)
-   * @param appendSubtitleAs Tells how the subtitles file has to be appended.
+   * @param subtitleElementType Tells how the subtitles file has to be appended.
    * @param translate Enable translation to english.
    * @throws WorkflowOperationException Get thrown if an error occurs.
    */
   private void createSubtitle(Track track, String languageCode, MediaPackage parentMediaPackage,
-          ConfiguredTagsAndFlavors tagsAndFlavors, AppendSubtitleAs appendSubtitleAs, Boolean translate)
+          ConfiguredTagsAndFlavors tagsAndFlavors, MediaPackageElement.Type subtitleElementType, Boolean translate)
           throws WorkflowOperationException {
 
     // Start the transcription job, create subtitles file
@@ -297,7 +299,7 @@ public class
               String.format("Speech-to-Text job for media package '%s' failed", parentMediaPackage));
     }
 
-    boolean subtitleAppended = attachSubtitle(job.getId(), parentMediaPackage, tagsAndFlavors, appendSubtitleAs);
+    boolean subtitleAppended = attachSubtitle(job.getId(), parentMediaPackage, tagsAndFlavors, subtitleElementType);
     if (subtitleAppended) {
       logger.info("Subtitle appended to media package {}", parentMediaPackage);
     } else {
