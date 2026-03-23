@@ -58,25 +58,25 @@ public interface SpeechToTextEngine {
       return isEmpty;
     }
 
-  private static boolean subtitleFileHasContent(Path path) {
-    try (BufferedReader br = Files.newBufferedReader(path)) {
-      String firstLine = br.readLine();
+    private static boolean subtitleFileHasContent(Path path) {
+      try (BufferedReader br = Files.newBufferedReader(path)) {
+        String firstLine = br.readLine();
 
-      if (firstLine == null || !"WEBVTT".equals(firstLine.trim())) {
+        if (firstLine == null || !"WEBVTT".equals(firstLine.trim())) {
+          return false;
+        }
+        String subtitleLine;
+        while ((subtitleLine = br.readLine()) != null) {
+          if (!subtitleLine.trim().isEmpty()) {
+            return true;
+          }
+        }
+
+        return false;
+      } catch (IOException e) {
         return false;
       }
-      String subtitleLine;
-      while ((subtitleLine = br.readLine()) != null) {
-        if (!subtitleLine.trim().isEmpty()) {
-          return true;
-        }
-      }
-
-      return false;
-    } catch (IOException e) {
-      return false;
     }
-  }
 
   }
 
