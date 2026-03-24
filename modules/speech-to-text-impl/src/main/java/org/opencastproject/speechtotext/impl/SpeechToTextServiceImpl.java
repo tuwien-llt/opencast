@@ -177,16 +177,11 @@ public class SpeechToTextServiceImpl extends AbstractJobProducer implements Spee
       String line;
       while ((line = br.readLine()) != null) {
         String trimmed = line.trim();
-        if (trimmed.isEmpty()) {
+        if (!trimmed.contains("-->")) {
           continue;
         }
 
-        String nextLine = br.readLine();
-        if (nextLine == null) {
-          logger.debug("File ended after cue identifier, returning no result.");
-        }
-
-        if (WEBVTT_TIMESTAMP.matcher(nextLine.trim()).matches()) {
+        if (WEBVTT_TIMESTAMP.matcher(trimmed).matches()) {
           logger.debug("Subtitle file has valid header and cue, returning result");
           break;
         }
