@@ -69,11 +69,6 @@ public abstract class AbstractSpeechToTextAttachOperationHandler extends Abstrac
    */
   private static final String TARGET_ELEMENT = "target-element";
 
-
-  protected enum AppendSubtitleAs {
-    attachment, track
-  }
-
   /**
    * Creates the subtitle file for a track and appends it to the media package.
    *
