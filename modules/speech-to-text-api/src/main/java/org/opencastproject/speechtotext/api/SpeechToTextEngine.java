@@ -21,11 +21,7 @@
 
 package org.opencastproject.speechtotext.api;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 /** Interface for speech-to-text implementations. */
 public interface SpeechToTextEngine {
@@ -38,8 +34,6 @@ public interface SpeechToTextEngine {
     public Result(String language, File subtitleFile) {
       this.language = language;
       this.subtitleFile = subtitleFile;
-
-      isEmpty = subtitleFileHasContent(subtitleFile.toPath());
     }
 
     public static Result empty() {
@@ -56,26 +50,6 @@ public interface SpeechToTextEngine {
 
     public boolean isEmpty() {
       return isEmpty;
-    }
-
-    private static boolean subtitleFileHasContent(Path path) {
-      try (BufferedReader br = Files.newBufferedReader(path)) {
-        String firstLine = br.readLine();
-
-        if (firstLine == null || !"WEBVTT".equals(firstLine.trim())) {
-          return false;
-        }
-        String subtitleLine;
-        while ((subtitleLine = br.readLine()) != null) {
-          if (!subtitleLine.trim().isEmpty()) {
-            return true;
-          }
-        }
-
-        return false;
-      } catch (IOException e) {
-        return false;
-      }
     }
 
   }
