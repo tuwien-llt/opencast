@@ -218,6 +218,11 @@ public class WhisperEngine implements SpeechToTextEngine {
       if (!output.isFile()) {
         throw new SpeechToTextEngineException("Whisper produced no output");
       }
+
+      if (output.length() == 0) {
+        return SpeechToTextEngine.Result.empty();
+      }
+
       logger.info("Subtitles file generated successfully: {}", output);
     } catch (Exception e) {
       logger.debug("Transcription failed closing Whisper transcription process for: {}", mediaFile);

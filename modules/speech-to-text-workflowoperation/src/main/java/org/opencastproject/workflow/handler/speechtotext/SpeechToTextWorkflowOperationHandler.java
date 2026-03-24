@@ -26,18 +26,14 @@ import org.opencastproject.job.api.JobContext;
 import org.opencastproject.mediapackage.MediaPackage;
 import org.opencastproject.mediapackage.MediaPackageElement;
 import org.opencastproject.mediapackage.MediaPackageElementFlavor;
-import org.opencastproject.mediapackage.MediaPackageElementParser;
 import org.opencastproject.mediapackage.MediaPackageElements;
 import org.opencastproject.mediapackage.Track;
-import org.opencastproject.mediapackage.attachment.AttachmentImpl;
 import org.opencastproject.mediapackage.selector.TrackSelector;
-import org.opencastproject.mediapackage.track.TrackImpl;
 import org.opencastproject.metadata.api.MediaPackageMetadata;
 import org.opencastproject.metadata.dublincore.DublinCoreCatalogService;
 import org.opencastproject.serviceregistry.api.ServiceRegistry;
 import org.opencastproject.speechtotext.api.SpeechToTextService;
 import org.opencastproject.speechtotext.api.SpeechToTextServiceException;
-import org.opencastproject.workflow.api.AbstractWorkflowOperationHandler;
 import org.opencastproject.workflow.api.ConfiguredTagsAndFlavors;
 import org.opencastproject.workflow.api.WorkflowInstance;
 import org.opencastproject.workflow.api.WorkflowOperationException;
@@ -46,7 +42,6 @@ import org.opencastproject.workflow.api.WorkflowOperationInstance;
 import org.opencastproject.workflow.api.WorkflowOperationResult;
 import org.opencastproject.workspace.api.Workspace;
 
-import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.osgi.service.component.ComponentContext;
@@ -56,8 +51,6 @@ import org.osgi.service.component.annotations.Reference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -77,7 +70,7 @@ import java.util.stream.Collectors;
     }
 )
 public class
-    SpeechToTextWorkflowOperationHandler extends AbstractWorkflowOperationHandler {
+    SpeechToTextWorkflowOperationHandler extends AbstractSpeechToTextAttachOperationHandler {
 
   private static final Logger logger = LoggerFactory.getLogger(SpeechToTextWorkflowOperationHandler.class);
 
@@ -126,18 +119,8 @@ public class
     }
   }
 
-  private enum AppendSubtitleAs {
-    attachment, track
-  }
-
   /** The speech-to-text service. */
   private SpeechToTextService speechToTextService = null;
-
-  /** The workspace service. */
-  private Workspace workspace;
-
-  /** The inspection service. */
-  private MediaInspectionService mediaInspectionService;
 
   /** The dublin core catalog service. */
   private DublinCoreCatalogService dublinCoreCatalogService;
@@ -190,7 +173,7 @@ public class
     String languageCode = getMediaPackageLanguage(mediaPackage, workflowInstance);
 
     // How to save the subtitle file? (as attachment, as track...)
-    AppendSubtitleAs appendSubtitleAs = howToAppendTheSubtitles(workflowInstance);
+    MediaPackageElement.Type subtitleElementType = getMediaPackageElementType(workflowInstance);
 
     // Translate to english
     Boolean translate = getTranslationMode(workflowInstance);
@@ -221,7 +204,7 @@ public class
       createSubtitleAsync(workflowInstance, tracksToTranscribe, languageCode, translate);
     } else {
       for (Track track : tracksToTranscribe) {
-        createSubtitle(track, languageCode, mediaPackage, tagsAndFlavors, appendSubtitleAs, translate);
+        createSubtitle(track, languageCode, mediaPackage, tagsAndFlavors, subtitleElementType, translate);
       }
     }
 
@@ -290,12 +273,12 @@ public class
    * @param languageCode The language of the track.
    * @param parentMediaPackage The media package where the track is located.
    * @param tagsAndFlavors Tags and flavors instance (to get target flavor information)
-   * @param appendSubtitleAs Tells how the subtitles file has to be appended.
+   * @param subtitleElementType Tells how the subtitles file has to be appended.
    * @param translate Enable translation to english.
    * @throws WorkflowOperationException Get thrown if an error occurs.
    */
   private void createSubtitle(Track track, String languageCode, MediaPackage parentMediaPackage,
-          ConfiguredTagsAndFlavors tagsAndFlavors, AppendSubtitleAs appendSubtitleAs, Boolean translate)
+          ConfiguredTagsAndFlavors tagsAndFlavors, MediaPackageElement.Type subtitleElementType, Boolean translate)
           throws WorkflowOperationException {
 
     // Start the transcription job, create subtitles file
@@ -316,60 +299,12 @@ public class
               String.format("Speech-to-Text job for media package '%s' failed", parentMediaPackage));
     }
 
-    // subtitles file is generated now, put it into the media package
-    try {
-      String[] jobOutput = job.getPayload().split(",");
-      URI output = new URI(jobOutput[0]);
-      String outputLanguage = jobOutput[1];
-      String engineType = jobOutput[2];
-
-      MediaPackageElement subtitleMediaPackageElement;
-      switch (appendSubtitleAs) {
-        case attachment:
-          subtitleMediaPackageElement = new AttachmentImpl();
-          break;
-        case track:
-        default:
-          subtitleMediaPackageElement = new TrackImpl();
-      }
-
-      subtitleMediaPackageElement.generateIdentifier();
-      try (InputStream in = workspace.read(output)) {
-        URI uri = workspace.put(parentMediaPackage.getIdentifier().toString(),
-                subtitleMediaPackageElement.getIdentifier(),
-                FilenameUtils.getName(output.getPath()), in);
-        subtitleMediaPackageElement.setURI(uri);
-      }
-      MediaPackageElementFlavor targetFlavor = tagsAndFlavors.getSingleTargetFlavor().applyTo(track.getFlavor());
-      subtitleMediaPackageElement.setFlavor(targetFlavor);
-
-      ConfiguredTagsAndFlavors.TargetTags targetTags = tagsAndFlavors.getTargetTags();
-      targetTags.getOverrideTags().add("lang:" + outputLanguage);
-      targetTags.getOverrideTags().add("generator-type:auto");
-      targetTags.getOverrideTags().add("generator:" + engineType.toLowerCase());
-
-      // this is used to set some values automatically, like the correct mimetype
-      Job inspection = mediaInspectionService.enrich(subtitleMediaPackageElement, true);
-      if (!waitForStatus(inspection).isSuccess()) {
-        throw new SpeechToTextServiceException(String.format(
-                "Transcription for '%s' failed at enriching process", trackURI));
-      }
-
-      subtitleMediaPackageElement = MediaPackageElementParser.getFromXml(inspection.getPayload());
-
-      applyTargetTagsToElement(targetTags, subtitleMediaPackageElement);
-
-      parentMediaPackage.add(subtitleMediaPackageElement);
-
-      workspace.delete(output);
-    } catch (Exception e) {
-      throw new WorkflowOperationException("Error handling text-to-speech service output", e);
-    }
-
-    try {
-      workspace.cleanup(parentMediaPackage.getIdentifier());
-    } catch (IOException e) {
-      throw new WorkflowOperationException(e);
+    boolean subtitleAppended = attachSubtitle(job.getId(), parentMediaPackage, tagsAndFlavors, subtitleElementType);
+    if (subtitleAppended) {
+      logger.info("Subtitle appended to media package {}", parentMediaPackage);
+    } else {
+      logger.info("No speech-to-text attachment, skipping.");
+      createResult(parentMediaPackage, WorkflowOperationResult.Action.SKIP);
     }
   }
 
@@ -425,30 +360,6 @@ public class
       throw new WorkflowOperationException(String.format(
           "Speech-to-Text job for media package '%s' failed, because of wrong workflow configuration. "
               + "track-selection-strategy of type '%s' does not exist.", mediaPackage, strategyCfg));
-    }
-  }
-
-
-  /**
-   * Get the information how to append the subtitles file to the media package.
-   *
-   * @param workflowInstance Contains the workflow configuration.
-   * @return How to append the subtitles file to the media package.
-   * @throws WorkflowOperationException Get thrown if an error occurs.
-   */
-  private AppendSubtitleAs howToAppendTheSubtitles(WorkflowInstance workflowInstance)
-          throws WorkflowOperationException {
-    WorkflowOperationInstance operation = workflowInstance.getCurrentOperation();
-    String targetElement = StringUtils.trimToEmpty(operation.getConfiguration(TARGET_ELEMENT)).toLowerCase();
-    if (targetElement.isEmpty()) {
-      return AppendSubtitleAs.track;
-    }
-    try {
-      return AppendSubtitleAs.valueOf(targetElement);
-    } catch (IllegalArgumentException e) {
-      throw new WorkflowOperationException(String.format(
-          "Speech-to-Text job for media package '%s' failed, because of wrong workflow configuration. "
-              + "target-element of type '%s' does not exist.", workflowInstance.getMediaPackage(), targetElement));
     }
   }
 

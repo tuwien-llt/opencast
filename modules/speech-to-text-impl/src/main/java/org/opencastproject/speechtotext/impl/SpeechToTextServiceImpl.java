@@ -45,12 +45,15 @@ import org.osgi.service.component.annotations.Reference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.net.URI;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Dictionary;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /** Creates a subtitles file for a video. */
 @Component(
@@ -84,7 +87,15 @@ public class SpeechToTextServiceImpl extends AbstractJobProducer implements Spee
   /** The workspace collection name */
   private static final String COLLECTION = "subtitles";
 
+  /** Constraint if the speech-to-text engine doesn't return any output */
+  private static final String NO_RESULT = "NO_RESULT";
+
   private static final String TMP_PREFIX = "tmp_";
+
+  private static final String WEBVTT_TIMESTAMP_STRING =
+      "(\\d+:)?[0-5]\\d:[0-5]\\d\\.\\d{3}\\s*-->\\s*(\\d+:)?[0-5]\\d:[0-5]\\d\\.\\d{3}";
+
+  private static final Pattern WEBVTT_TIMESTAMP = Pattern.compile(WEBVTT_TIMESTAMP_STRING);
 
 
   //================================================================================
@@ -155,6 +166,30 @@ public class SpeechToTextServiceImpl extends AbstractJobProducer implements Spee
               workspace.get(mediaFile), jobDir, language, translate);
       language = result.getLanguage();
 
+      BufferedReader br = Files.newBufferedReader(result.getSubtitleFile().toPath());
+      String firstLine = br.readLine();
+
+      if (firstLine == null || !firstLine.startsWith("WEBVTT")) {
+        logger.debug("Subtitle file had no valid header, returning no result.");
+        return NO_RESULT;
+      }
+
+      String line;
+      while ((line = br.readLine()) != null) {
+        String trimmed = line.trim();
+        if (!trimmed.contains("-->")) {
+          continue;
+        }
+
+        if (WEBVTT_TIMESTAMP.matcher(trimmed).matches()) {
+          logger.debug("Subtitle file has valid header and cue, returning result");
+          break;
+        }
+
+        logger.debug("Subtitle file has valid header but invalid cue, returning no result");
+        return NO_RESULT;
+      }
+
       // we need to call the "putInCollection" method to get
       // a URI, that can be used in the following processes
       final var outputName = String.format("%d-%s.vtt", job.getId(), FilenameUtils.getBaseName(mediaFile.getPath()));
@@ -168,6 +203,28 @@ public class SpeechToTextServiceImpl extends AbstractJobProducer implements Spee
     }
     return subtitleFilesURI.toString() + "," + language + "," + speechToTextEngine.getEngineName();
   }
+
+  /**
+  private static boolean subtitleFileHasContent(Path path) {
+    try (BufferedReader br = Files.newBufferedReader(path)) {
+      String firstLine = br.readLine();
+
+      if (firstLine == null || !"WEBVTT".equals(firstLine.trim())) {
+        return false;
+      }
+      String subtitleLine;
+      while ((subtitleLine = br.readLine()) != null) {
+        if (!subtitleLine.trim().isEmpty()) {
+          return true;
+        }
+      }
+
+      return false;
+    } catch (IOException e) {
+      return false;
+    }
+  }
+  */
 
 
   /**
